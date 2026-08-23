@@ -29,6 +29,14 @@
   }
   .wrap { max-width: 420px; width: 100%; }
   .header { text-align: center; margin-bottom: 20px; }
+  .logo {
+    width: 72px;
+    height: 72px;
+    margin: 0 auto 12px;
+    border-radius: 16px;
+    display: block;
+    object-fit: contain;
+  }
   .header h1 { margin: 0; color: var(--brand); font-size: 1.3rem; }
   .header p { margin: 6px 0 0; color: var(--muted); font-size: .85rem; }
   .panel {
@@ -37,6 +45,25 @@
     padding: 24px;
     box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
   }
+  .tabs {
+    display: flex;
+    background: #f1f5f9;
+    border-radius: 10px;
+    padding: 4px;
+    margin-bottom: 18px;
+  }
+  .tab {
+    flex: 1;
+    text-align: center;
+    padding: 9px 6px;
+    border-radius: 8px;
+    font-size: .82rem;
+    font-weight: 600;
+    color: var(--muted);
+    cursor: pointer;
+    user-select: none;
+  }
+  .tab.active { background: #fff; color: var(--brand); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
   .form-group { margin-bottom: 16px; }
   .form-group label {
     display: block;
@@ -58,11 +85,40 @@
     border-color: var(--brand-light);
     box-shadow: 0 0 0 3px rgba(13,92,182,.12);
   }
+  .id-group {
+    display: flex;
+    align-items: stretch;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .id-prefix {
+    background: #f1f5f9;
+    color: var(--muted);
+    font-size: .95rem;
+    font-weight: 600;
+    padding: 12px 10px 12px 14px;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    border-right: 1px solid var(--border);
+  }
+  .id-group input {
+    border: none;
+    border-radius: 0;
+    flex: 1;
+    min-width: 0;
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-align: center;
+  }
+  .id-group input:focus { box-shadow: none; }
   .hint {
     color: #94a3b8;
     font-size: .78rem;
     line-height: 1.5;
-    margin: 4px 0 16px;
+    margin: 6px 0 16px;
   }
   .btn {
     width: 100%;
@@ -97,8 +153,14 @@
 <body>
   <div class="wrap">
     <div class="header">
+      <!--
+        One-time setup: replace the src below with your logo. Easiest
+        option is a small PNG/SVG hosted in the same GitHub Pages repo
+        (e.g. "logo.png" next to this file) — then just use src="logo.png".
+      -->
+      <img class="logo" src="logo.png" alt="D'CORNER logo" onerror="this.style.display='none'">
       <h1 id="businessName">Self Check-In</h1>
-      <p id="subtitle">Enter your Booking ID and mobile number to check in.</p>
+      <p id="subtitle">Check in for your booking below.</p>
     </div>
 
     <div class="panel">
@@ -109,16 +171,32 @@
       </div>
 
       <div id="formState" class="hidden">
+        <div class="tabs">
+          <div class="tab active" id="tabCourt" onclick="setMode('court')">Court Booking</div>
+          <div class="tab" id="tabOpenPlay" onclick="setMode('openplay')">Open Play</div>
+        </div>
+
         <form id="checkinForm">
-          <div class="form-group">
-            <label for="bookingId">Booking ID</label>
-            <input id="bookingId" type="text" maxlength="40" placeholder="e.g. DCR-260821-001" required autocapitalize="characters" autocomplete="off">
+          <div class="form-group" id="courtIdGroup">
+            <label for="courtIdDigits">Booking ID</label>
+            <div class="id-group">
+              <span class="id-prefix" id="courtIdPrefix">DCR-######-</span>
+              <input id="courtIdDigits" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="3" placeholder="008" required>
+            </div>
+            <p class="hint">Just the last 3 digits of today's Booking ID — check your confirmation email or SMS.</p>
           </div>
+
+          <div class="form-group hidden" id="openPlayIdGroup">
+            <label for="openPlayId">Open Play Join ID</label>
+            <input id="openPlayId" type="text" maxlength="40" placeholder="e.g. OPJ-260823-004" autocapitalize="characters">
+            <p class="hint">Found in your Open Play confirmation email.</p>
+          </div>
+
           <div class="form-group">
             <label for="mobile">Mobile Number</label>
             <input id="mobile" type="tel" maxlength="20" placeholder="Your mobile number" required autocomplete="off">
           </div>
-          <p class="hint">Both were used when you booked — check your confirmation email or SMS if you're not sure.</p>
+
           <button type="submit" class="btn btn-primary" id="submitBtn">Check In</button>
         </form>
       </div>
@@ -152,11 +230,23 @@
   const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw9PPEo_IqOH6U65MXYjQQ90rcMA59E5o5WKWBNd78e7pUudKmB16JK998o_oXaf6hM/exec';
 
   const el = id => document.getElementById(id);
+  let mode = 'court';
+  let todayCompact = '';
 
   function showOnly(id) {
     ['loadingState', 'formState', 'resultState', 'disabledState', 'errorState'].forEach(s => {
       el(s).classList.toggle('hidden', s !== id);
     });
+  }
+
+  function setMode(next) {
+    mode = next;
+    el('tabCourt').classList.toggle('active', next === 'court');
+    el('tabOpenPlay').classList.toggle('active', next === 'openplay');
+    el('courtIdGroup').classList.toggle('hidden', next !== 'court');
+    el('openPlayIdGroup').classList.toggle('hidden', next !== 'openplay');
+    el('openPlayId').required = next === 'openplay';
+    el('courtIdDigits').required = next === 'court';
   }
 
   async function apiGet(params) {
@@ -177,6 +267,9 @@
       el('businessName').textContent = (data && data.businessName) || 'Self Check-In';
       document.title = ((data && data.businessName) || 'Self Check-In') + ' — Check-In';
 
+      todayCompact = (data && data.todayCompact) || '';
+      el('courtIdPrefix').textContent = 'DCR-' + (todayCompact || '######') + '-';
+
       if (data && data.enabled === false) {
         showOnly('disabledState');
         return;
@@ -188,11 +281,25 @@
     }
   }
 
+  // Only digits, max 3 characters, in the court booking box.
+  el('courtIdDigits').addEventListener('input', function () {
+    this.value = this.value.replace(/\D/g, '').slice(0, 3);
+  });
+
   el('checkinForm').addEventListener('submit', async function (event) {
     event.preventDefault();
-    const bookingId = el('bookingId').value.trim();
     const mobile = el('mobile').value.trim();
-    if (!bookingId || !mobile) return;
+    let identifier = '';
+
+    if (mode === 'court') {
+      const digits = el('courtIdDigits').value.trim();
+      if (!digits || !todayCompact) return;
+      identifier = 'DCR-' + todayCompact + '-' + digits.padStart(3, '0');
+    } else {
+      identifier = el('openPlayId').value.trim();
+      if (!identifier) return;
+    }
+    if (!mobile) return;
 
     const btn = el('submitBtn');
     btn.disabled = true;
@@ -200,7 +307,7 @@
     btn.textContent = 'Checking in…';
 
     try {
-      const result = await apiGet({ api: 'selfcheckin', identifier: bookingId, mobile: mobile });
+      const result = await apiGet({ api: 'selfcheckin', identifier: identifier, mobile: mobile });
       showResult(result);
     } catch (err) {
       showResult({ success: false, message: err.message || 'Something went wrong. Please see staff for help.' });
