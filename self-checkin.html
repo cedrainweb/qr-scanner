@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Self Check-In</title>
+<style>
+  :root {
+    --brand: #073b7a;
+    --brand-light: #0d5cb6;
+    --bg: #f4f7fb;
+    --text: #1e293b;
+    --muted: #64748b;
+    --border: #e2e8f0;
+    --danger: #dc2626;
+    --success: #16a34a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .wrap { max-width: 420px; width: 100%; }
+  .header { text-align: center; margin-bottom: 20px; }
+  .header h1 { margin: 0; color: var(--brand); font-size: 1.3rem; }
+  .header p { margin: 6px 0 0; color: var(--muted); font-size: .85rem; }
+  .panel {
+    background: #fff;
+    border-radius: 14px;
+    padding: 24px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+  }
+  .form-group { margin-bottom: 16px; }
+  .form-group label {
+    display: block;
+    font-size: .82rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+  .form-group input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 1rem;
+    font-family: inherit;
+  }
+  .form-group input:focus {
+    outline: none;
+    border-color: var(--brand-light);
+    box-shadow: 0 0 0 3px rgba(13,92,182,.12);
+  }
+  .hint {
+    color: #94a3b8;
+    font-size: .78rem;
+    line-height: 1.5;
+    margin: 4px 0 16px;
+  }
+  .btn {
+    width: 100%;
+    padding: 13px;
+    border: none;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .btn-primary { background: var(--brand); color: #fff; }
+  .btn-primary:disabled { background: #94a3b8; cursor: not-allowed; }
+  .btn-light { background: #f1f5f9; color: var(--text); margin-top: 10px; }
+  .hidden { display: none !important; }
+  .result { text-align: center; padding: 8px 0; }
+  .result-icon { font-size: 2.6rem; margin-bottom: 8px; }
+  .result h2 { margin: 0 0 6px; color: var(--brand); font-size: 1.15rem; }
+  .result p { color: var(--muted); font-size: .9rem; line-height: 1.5; margin: 0 0 4px; }
+  .spinner {
+    width: 28px; height: 28px;
+    border: 3px solid rgba(7,59,122,.15);
+    border-top-color: var(--brand);
+    border-radius: 50%;
+    margin: 0 auto 14px;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .center-msg { text-align: center; color: var(--muted); font-size: .9rem; padding: 20px 0; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <h1 id="businessName">Self Check-In</h1>
+      <p id="subtitle">Enter your Booking ID and mobile number to check in.</p>
+    </div>
+
+    <div class="panel">
+
+      <div id="loadingState" class="center-msg">
+        <div class="spinner"></div>
+        Loading…
+      </div>
+
+      <div id="formState" class="hidden">
+        <form id="checkinForm">
+          <div class="form-group">
+            <label for="bookingId">Booking ID</label>
+            <input id="bookingId" type="text" maxlength="40" placeholder="e.g. DCR-260821-001" required autocapitalize="characters" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label for="mobile">Mobile Number</label>
+            <input id="mobile" type="tel" maxlength="20" placeholder="Your mobile number" required autocomplete="off">
+          </div>
+          <p class="hint">Both were used when you booked — check your confirmation email or SMS if you're not sure.</p>
+          <button type="submit" class="btn btn-primary" id="submitBtn">Check In</button>
+        </form>
+      </div>
+
+      <div id="resultState" class="result hidden">
+        <div class="result-icon" id="resultIcon"></div>
+        <h2 id="resultTitle"></h2>
+        <p id="resultMessage"></p>
+        <button type="button" class="btn btn-light" id="tryAgainBtn">Check in someone else</button>
+      </div>
+
+      <div id="disabledState" class="center-msg hidden">
+        Self check-in is temporarily unavailable. Please see staff at the counter to check in.
+      </div>
+
+      <div id="errorState" class="center-msg hidden">
+        Something went wrong loading this page. Please see staff at the counter, or try again.
+      </div>
+
+    </div>
+  </div>
+
+<script>
+  // ---------------------------------------------------------------
+  // One-time setup: paste your Apps Script web app's deployed URL here
+  // (Deploy > Manage deployments > Web app, the URL ending in /exec).
+  // This page talks to it via plain cross-origin GET requests only —
+  // same approach as qr-scanner.html — so no Apps Script project files
+  // need to change to add a new page; this file is fully standalone.
+  // ---------------------------------------------------------------
+  const APPS_SCRIPT_URL = 'PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE';
+
+  const el = id => document.getElementById(id);
+
+  function showOnly(id) {
+    ['loadingState', 'formState', 'resultState', 'disabledState', 'errorState'].forEach(s => {
+      el(s).classList.toggle('hidden', s !== id);
+    });
+  }
+
+  async function apiGet(params) {
+    if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf('PASTE_') === 0) {
+      throw new Error('This page is not set up yet — APPS_SCRIPT_URL is missing.');
+    }
+    const query = new URLSearchParams(params).toString();
+    const response = await fetch(APPS_SCRIPT_URL + '?' + query, { method: 'GET' });
+    if (!response.ok) throw new Error('Network error (' + response.status + ').');
+    const data = await response.json();
+    if (data && data.error) throw new Error(data.error);
+    return data;
+  }
+
+  async function init() {
+    try {
+      const data = await apiGet({ api: 'selfcheckindata' });
+      el('businessName').textContent = (data && data.businessName) || 'Self Check-In';
+      document.title = ((data && data.businessName) || 'Self Check-In') + ' — Check-In';
+
+      if (data && data.enabled === false) {
+        showOnly('disabledState');
+        return;
+      }
+      showOnly('formState');
+    } catch (err) {
+      console.error(err);
+      showOnly('errorState');
+    }
+  }
+
+  el('checkinForm').addEventListener('submit', async function (event) {
+    event.preventDefault();
+    const bookingId = el('bookingId').value.trim();
+    const mobile = el('mobile').value.trim();
+    if (!bookingId || !mobile) return;
+
+    const btn = el('submitBtn');
+    btn.disabled = true;
+    const original = btn.textContent;
+    btn.textContent = 'Checking in…';
+
+    try {
+      const result = await apiGet({ api: 'selfcheckin', identifier: bookingId, mobile: mobile });
+      showResult(result);
+    } catch (err) {
+      showResult({ success: false, message: err.message || 'Something went wrong. Please see staff for help.' });
+    } finally {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  });
+
+  function showResult(result) {
+    showOnly('resultState');
+    const icon = el('resultIcon');
+    const title = el('resultTitle');
+    const message = el('resultMessage');
+
+    if (result && result.success) {
+      icon.textContent = '✅';
+      title.textContent = 'Checked in — welcome, ' + (result.customerName || 'player') + '!';
+      message.textContent = result.message || 'You are all set. Enjoy your game!';
+    } else if (result && result.duplicate) {
+      icon.textContent = 'ℹ️';
+      title.textContent = 'Already checked in';
+      message.textContent = result.message || ('This booking was already checked in' + (result.checkInTime ? ' at ' + result.checkInTime + '.' : '.'));
+    } else {
+      icon.textContent = '⚠️';
+      title.textContent = 'Check-in unsuccessful';
+      message.textContent = (result && result.message) || 'Please see staff at the counter for help.';
+    }
+  }
+
+  el('tryAgainBtn').addEventListener('click', function () {
+    el('checkinForm').reset();
+    showOnly('formState');
+  });
+
+  init();
+</script>
+</body>
+</html>
