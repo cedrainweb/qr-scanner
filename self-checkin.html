@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Self Check-In</title>
+<style>
+  :root { --bg:#07122b; --card:#0f1d3d; --line:#233a6b; --text:#eaf0ff; --muted:#9fb0d6; --green:#58cc02; --red:#ff6b6b; --amber:#fbbf24; }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px;
+         background: radial-gradient(1200px 600px at 50% -10%, #12306e 0%, var(--bg) 60%); color:var(--text);
+         font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+  .card { width:100%; max-width:420px; background:var(--card); border:1px solid var(--line); border-radius:20px; padding:26px 22px; box-shadow:0 20px 60px rgba(0,0,0,.45); }
+  h1 { margin:0 0 4px; font-size:1.45rem; }
+  .sub { margin:0 0 20px; color:var(--muted); font-size:.95rem; }
+  label { display:block; font-weight:700; margin-bottom:8px; }
+  input { width:100%; font-size:1.35rem; letter-spacing:.04em; padding:14px 16px; border-radius:12px; border:2px solid var(--line); background:#0a1633; color:var(--text); outline:none; }
+  input:focus { border-color:var(--green); }
+  small { display:block; margin-top:8px; color:var(--muted); }
+  button { width:100%; margin-top:18px; padding:15px; font-size:1.1rem; font-weight:800; border:0; border-radius:999px; background:var(--green); color:#06240a; cursor:pointer; }
+  button:disabled { opacity:.6; cursor:wait; }
+  .result { margin-top:18px; padding:16px; border-radius:14px; display:none; line-height:1.45; }
+  .result.show { display:block; }
+  .result.ok { background:rgba(88,204,2,.14); border:1px solid #3f7d1f; }
+  .result.bad { background:rgba(255,107,107,.12); border:1px solid #8f3a3a; }
+  .result.info { background:rgba(251,191,36,.12); border:1px solid #8a6a12; }
+  .result b { display:block; font-size:1.15rem; margin-bottom:4px; }
+  .off { text-align:center; color:var(--amber); font-weight:700; }
+</style>
+</head>
+<body>
+<main class="card">
+  <h1 id="biz">Self Check-In</h1>
+  <p class="sub">Enter the mobile number you used when you booked.</p>
+  <form id="f" novalidate>
+    <label for="mobile">Registered mobile number</label>
+    <input id="mobile" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="09XX XXX XXXX" required>
+    <small>No Booking ID needed.</small>
+    <button id="btn" type="submit">Check In</button>
+  </form>
+  <div id="res" class="result" role="status" aria-live="polite"></div>
+</main>
+<script>
+  // Your Apps Script web app (/exec) address.
+  var API = 'https://script.google.com/macros/s/AKfycbw9PPEo_IqOH6U65MXYjQQ90rcMA59E5o5WKWBNd78e7pUudKmB16JK998o_oXaf6hM/exec';
+  var res = document.getElementById('res'), btn = document.getElementById('btn');
+
+  function show(kind, title, text) {
+    res.className = 'result show ' + kind;
+    res.innerHTML = '';
+    var b = document.createElement('b'); b.textContent = title; res.appendChild(b);
+    if (text) res.appendChild(document.createTextNode(text));
+  }
+  function call(params) {
+    var q = Object.keys(params).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); }).join('&');
+    return fetch(API + '?' + q, { method: 'GET' }).then(function (r) { return r.json(); });
+  }
+
+  call({ api: 'selfcheckindata' }).then(function (d) {
+    if (d && d.businessName) document.getElementById('biz').textContent = d.businessName + ' • Self Check-In';
+    if (d && d.enabled === false) {
+      btn.disabled = true;
+      show('info', 'Self check-in is unavailable right now.', ' Please see the staff to check in.');
+    }
+  }).catch(function () {});
+
+  document.getElementById('f').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var mobile = document.getElementById('mobile').value.trim();
+    if (!mobile) { show('bad', 'Please enter your mobile number.', ''); return; }
+    btn.disabled = true; btn.textContent = 'Checking…'; res.className = 'result';
+    call({ api: 'selfcheckin', mobile: mobile }).then(function (r) {
+      if (r && r.success) {
+        var when = [r.startTime, r.endTime].filter(Boolean).join(' – ');
+        show('ok', '✅ You are checked in, ' + (r.customerName || '') + '!',
+          (when ? 'Your time: ' + when + '. ' : '') + 'Enjoy your game.');
+      } else {
+        show(r && r.duplicate ? 'info' : 'bad', (r && r.duplicate) ? 'Already checked in' : 'Could not check in',
+          ' ' + ((r && (r.message || r.error)) || 'Please see the staff for help.'));
+      }
+    }).catch(function () {
+      show('bad', 'Connection problem', ' Please check your internet and try again.');
+    }).finally(function () { btn.disabled = false; btn.textContent = 'Check In'; });
+  });
+</script>
+</body>
+</html>
